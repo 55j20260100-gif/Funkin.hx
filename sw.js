@@ -1,7 +1,7 @@
-const CDN = 'https://cdn.jsdelivr.net/gh/FunkinCrew/funkin.assets@main/';
-const CACHE_NAME = 'funkin-assets-v15';
+const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
+const CACHE_NAME = 'funkin-assets-v16-github';
 let modBase = '';
-let fontUrl = 'https://cdn.jsdelivr.net/gh/FunkinCrew/funkin.assets@main/fonts/vcr-bold.ttf';
+let fontUrl = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/fonts/vcr-bold.ttf';
 let engine = 'official';
 let runtimeBase = '';
 
@@ -40,6 +40,11 @@ async function resolveAsset(relativePath) {
   const basename = relativePath.split('/').pop();
   const isFont = /\.(ttf|otf|woff2?)$/i.test(basename);
   const candidates = [];
+  // Some builds request a bare Voices.ogg, while the official GitHub
+  // assets use character-specific voice files. Use the BF vocal as a
+  // compatibility fallback so the song can start instead of hanging.
+  const bareVoices = relativePath.match(/^songs\/([^/]+)\/Voices\.ogg$/i);
+  if (bareVoices) candidates.push(CDN + 'songs/' + bareVoices[1] + '/Voices-bf.ogg');
   const legacy = {'default.png':'preload/images/fonts/default.png','circle.png':'preload/images/pauseCircle.png','button.png':'preload/images/backButton.png','vcr-bmp.fnt':'fonts/vcr-bmp.fnt','vcr-bmp.png':'fonts/vcr-bmp.png','flixel.mp3':'preload/sounds/CS_select.mp3','beep.mp3':'preload/sounds/CS_select.mp3'};
   const isOfficialVcr = /^vcr(?:-bold)?\.ttf$/i.test(basename);
   // Keep the engine's own VCR face on desktop; replacing vcr.ttf with a UI
