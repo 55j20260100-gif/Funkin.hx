@@ -46,10 +46,9 @@ async function resolveAsset(relativePath) {
   const bareVoices = relativePath.match(/^songs\/([^/]+)\/Voices\.ogg$/i);
   if (bareVoices) candidates.push(CDN + 'songs/' + bareVoices[1] + '/Voices-bf.ogg');
   const legacy = {'default.png':'preload/images/fonts/default.png','circle.png':'preload/images/pauseCircle.png','button.png':'preload/images/backButton.png','vcr-bmp.fnt':'fonts/vcr-bmp.fnt','vcr-bmp.png':'fonts/vcr-bmp.png','flixel.mp3':'preload/sounds/CS_select.mp3','beep.mp3':'preload/sounds/CS_select.mp3'};
-  const isOfficialVcr = /^vcr(?:-bold)?\.ttf$/i.test(basename);
-  // Keep the engine's own VCR face on desktop; replacing vcr.ttf with a UI
+    // Keep the engine's own VCR face on desktop; replacing vcr.ttf with a UI
   // font changes Canvas/Lime glyph metrics and makes the game look wrong.
-  if (fontUrl && isFont && !isOfficialVcr && (relativePath.startsWith('fonts/') || relativePath.startsWith('flixel/fonts/'))) candidates.push(fontUrl);
+  if (fontUrl && isFont && (relativePath.startsWith('fonts/') || relativePath.startsWith('flixel/fonts/'))) candidates.push(fontUrl);
   if (modBase) candidates.push(modBase + relativePath);
   if (runtimeBase) {
     if (engine === 'psych' || engine === 'manny') candidates.push(runtimeBase + 'shared/' + relativePath, runtimeBase + relativePath);
