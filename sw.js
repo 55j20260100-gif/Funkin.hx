@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v21-github';
+const CACHE_NAME = 'funkin-assets-v22-github';
 let modBase = '';
 let fontUrl = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/fonts/vcr-bold.ttf';
 let engine = 'official';
@@ -57,14 +57,20 @@ async function resolveAsset(relativePath) {
     else candidates.push(runtimeBase + relativePath);
   }
   if (legacy[basename]) candidates.push(CDN + legacy[basename]);
-  if (relativePath.startsWith('fonts/')) candidates.push(CDN + relativePath);
+  if (relativePath.startsWith('fonts/')) candidates.push(CDN + relativePath, CDN + 'preload/' + relativePath, CDN + 'shared/' + relativePath);
   // Map the engine's virtual assets/data path directly to the official CDN.
   // This avoids waiting for several guaranteed 404 fallbacks on desktop.
   if (relativePath.startsWith('data/')) candidates.push(CDN + 'preload/' + relativePath, CDN + 'shared/' + relativePath, CDN + relativePath);
   else if (relativePath.startsWith('images/')) candidates.push(CDN + 'preload/' + relativePath, CDN + 'shared/' + relativePath, CDN + relativePath);
   else if (relativePath.startsWith('songs/')) candidates.push(CDN + relativePath, CDN + 'preload/' + relativePath, CDN + 'shared/' + relativePath);
   else if (relativePath.startsWith('music/') || relativePath.startsWith('sounds/')) candidates.push(CDN + 'preload/' + relativePath, CDN + 'shared/' + relativePath, CDN + relativePath);
-  else if (/^(preload|shared|week\d+|weekend\d+)\//i.test(relativePath)) candidates.push(CDN + relativePath);
+  // A library-qualified path such as shared:notes is requested as shared/notes.png,
+  // while the official repository stores it under shared/images/notes.png.
+  else if (/^shared\//i.test(relativePath)) {
+    const rest = relativePath.slice('shared/'.length);
+    candidates.push(CDN + 'shared/images/' + rest, CDN + 'shared/' + rest, CDN + 'preload/images/' + rest);
+  }
+  else if (/^(preload|week\d+|weekend\d+)\//i.test(relativePath)) candidates.push(CDN + relativePath);
   else candidates.push(CDN + 'preload/' + relativePath, CDN + 'shared/' + relativePath);
   const cache = await caches.open(CACHE_NAME);
   for (const url of candidates) {
