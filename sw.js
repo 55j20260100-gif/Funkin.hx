@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v16-github';
+const CACHE_NAME = 'funkin-assets-v18-github';
 let modBase = '';
 let fontUrl = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/fonts/vcr-bold.ttf';
 let engine = 'official';
