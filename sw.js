@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v29-github';
+const CACHE_NAME = 'funkin-assets-v30-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -19,6 +19,10 @@ self.addEventListener('message', event => {
 self.addEventListener('fetch', event => {
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin) return;
+  if (/\/Funkin\.js$/i.test(requestUrl.pathname)) {
+    event.respondWith(servePatchedGame(event.request));
+    return;
+  }
   if (/\/favicon\.svg$/i.test(requestUrl.pathname)) {
     event.respondWith(faviconSvg());
     return;
@@ -143,3 +147,147 @@ async function resolveManifest(name){
 function silentWav(){const sr=8000,n=800,b=new Uint8Array(44+n),v=new DataView(b.buffer);const w=(o,t)=>{for(let i=0;i<t.length;i++)b[o+i]=t.charCodeAt(i)};w(0,'RIFF');v.setUint32(4,36+n,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,sr,true);v.setUint32(28,sr,true);v.setUint16(32,1,true);v.setUint16(34,8,true);w(36,'data');v.setUint32(40,n,true);b.fill(128,44);return new Response(b,{status:200,headers:{'Content-Type':'audio/wav'}})}
 function transparentPng(){const bytes=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='),c=>c.charCodeAt(0));return new Response(bytes,{status:200,headers:{'Content-Type':'image/png','Cache-Control':'public,max-age=31536000'}})}
 function faviconSvg(){return new Response('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#171827"/><path d="M14 18h36v8H22v7h22v8H22v13h-8z" fill="#ff4fa3"/><circle cx="47" cy="47" r="6" fill="#43d9ff"/></svg>',{status:200,headers:{'Content-Type':'image/svg+xml','Cache-Control':'public,max-age=31536000'}})}
+
+// ===================== DEBUG LOGGER (ボットのホールドノーツ調査用) =====================
+// Funkin.js を取得するたびに、先頭へログ機能を足し、ホールド関連の関数へログ行を差し込んで返す。
+// Funkin.js 本体のファイルは一切書き換えない。不要になったらこのブロックと fetch の hook を消せばよい。
+// 画面右下の「LOG」ボタン → ログ表示 / コピー。固まった後にリロードすると「前回」のログも見られる。
+function debugPrelude() {
+  var KEY = 'funkinDbgLog', PREV = 'funkinDbgPrev', MAX = 200;
+  var buf = [], t0 = Date.now(), errCount = 0, panel = null, btn = null, pre = null;
+  try { var old = localStorage.getItem(KEY); if (old) localStorage.setItem(PREV, old); } catch (e) {}
+  function save() { try { localStorage.setItem(KEY, buf.join('\n')); } catch (e) {} }
+  function fmt(a) {
+    return Array.prototype.map.call(a, function (x) {
+      try {
+        if (x instanceof Error) return x.stack || String(x);
+        if (x !== null && typeof x === 'object') return JSON.stringify(x).slice(0, 300);
+        return String(x);
+      } catch (e) { return '?'; }
+    }).join(' ').slice(0, 600);
+  }
+  var lastMsg = '', lastCount = 1;
+  function add(tag, args) {
+    var msg = tag + ' ' + fmt(args);
+    if (msg === lastMsg && buf.length) { lastCount++; buf[buf.length - 1] = buf[buf.length - 1].replace(/( x\d+)?$/, ' x' + lastCount); }
+    else { lastMsg = msg; lastCount = 1; buf.push('[' + ((Date.now() - t0) / 1000).toFixed(2) + '] ' + msg); if (buf.length > MAX) buf.shift(); }
+    save();
+    if (tag === 'ERROR') { errCount++; if (btn) { btn.textContent = 'LOG!(' + errCount + ')'; btn.style.background = '#c00'; } }
+    if (pre && panel && panel.style.display !== 'none') render();
+  }
+  function render() {
+    var prev = ''; try { prev = localStorage.getItem(PREV) || ''; } catch (e) {}
+    pre.textContent = (prev ? '===== 前回のセッション(固まった時はこちら) =====\n' + prev + '\n\n' : '') + '===== 今回 =====\n' + buf.join('\n');
+    pre.scrollTop = pre.scrollHeight;
+  }
+  window.__dbg = function () { add('LOG', arguments); };
+  var tickN = {};
+  window.__dbgTick = function (name, extra) { tickN[name] = (tickN[name] || 0) + 1; if (tickN[name] % 120 === 1) add('TICK', [name, '#' + tickN[name], extra]); };
+
+  window.addEventListener('error', function (e) { add('ERROR', [e.message, (e.filename || '').split('/').pop() + ':' + e.lineno + ':' + e.colno, e.error && e.error.stack ? e.error.stack.split('\n').slice(0, 8).join(' | ') : '']); });
+  window.addEventListener('unhandledrejection', function (e) { add('ERROR', ['unhandledrejection', e.reason && (e.reason.stack || e.reason)]); });
+  ['error', 'warn', 'log'].forEach(function (k) {
+    var orig = console[k]; if (!orig) return;
+    console[k] = function () {
+      try {
+        var t = fmt(arguments);
+        if (k === 'error') add('ERROR', [t]);
+        else if (k === 'warn') add('WARN', [t]);
+        else if (/hold|cover|bot|miss|error|exception|fail|null/i.test(t)) add('log', [t]);
+      } catch (e) {}
+      return orig.apply(console, arguments);
+    };
+  });
+
+  // 固まり検知: タイマーは動くのに描画ループ(rAF)が止まった=ゲームループが例外で死んだ、
+  // タイマーごと止まった=無限ループ等で完全フリーズ(この場合は復帰後/リロード後に「前回」ログで確認)
+  var lastBeat = Date.now(), lastRaf = Date.now();
+  (function raf() { lastRaf = Date.now(); requestAnimationFrame(raf); })();
+  setInterval(function () {
+    var now = Date.now();
+    if (now - lastBeat > 2000) add('FREEZE', ['メインスレッドが ' + ((now - lastBeat) / 1000).toFixed(1) + ' 秒止まっていた']);
+    if (now - lastRaf > 2000 && !document.hidden) add('FREEZE', ['描画ループ(rAF)が ' + ((now - lastRaf) / 1000).toFixed(1) + ' 秒止まっている=ゲームループ停止']);
+    lastBeat = now;
+  }, 500);
+
+  function copyText(t) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t).catch(function () { fallback(t); });
+    fallback(t);
+  }
+  function fallback(t) {
+    var ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;left:0;top:0;opacity:.01';
+    document.body.appendChild(ta); ta.focus(); ta.select(); try { document.execCommand('copy'); } catch (e) {} document.body.removeChild(ta);
+  }
+  function mk(tag, css, text, fn) { var el = document.createElement(tag); el.style.cssText = css; if (text) el.textContent = text; if (fn) el.onclick = fn; return el; }
+  function ui() {
+    if (btn || !document.body) return;
+    var bs = 'font:700 13px system-ui,sans-serif;padding:8px 12px;margin:0 6px 6px 0;border:0;border-radius:6px;background:#333;color:#fff';
+    btn = mk('button', 'position:fixed;right:8px;bottom:8px;z-index:2147483647;font:700 13px system-ui,sans-serif;padding:10px 14px;border:0;border-radius:8px;background:#06c;color:#fff;opacity:.85', 'LOG', function () { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; if (panel.style.display === 'block') render(); });
+    panel = mk('div', 'display:none;position:fixed;left:0;right:0;bottom:0;top:30%;z-index:2147483646;background:#000e;color:#8f8;padding:8px;box-sizing:border-box');
+    var bar = mk('div', 'margin-bottom:6px');
+    var copyBtn = mk('button', bs, 'コピー', function () { copyText(pre.textContent); copyBtn.textContent = 'コピーした'; setTimeout(function () { copyBtn.textContent = 'コピー'; }, 1500); });
+    bar.appendChild(copyBtn);
+    bar.appendChild(mk('button', bs, '今回クリア', function () { buf = []; lastMsg = ''; save(); render(); }));
+    bar.appendChild(mk('button', bs, '前回クリア', function () { try { localStorage.removeItem(PREV); } catch (e) {} render(); }));
+    bar.appendChild(mk('button', bs, '閉じる', function () { panel.style.display = 'none'; }));
+    pre = mk('pre', 'margin:0;height:calc(100% - 48px);overflow:auto;font:11px/1.35 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all');
+    panel.appendChild(bar); panel.appendChild(pre);
+    document.body.appendChild(panel); document.body.appendChild(btn);
+  }
+  if (document.body) ui(); else document.addEventListener('DOMContentLoaded', ui);
+  setTimeout(ui, 1500);
+  add('START', ['デバッグログ有効 UA=' + navigator.userAgent.slice(0, 80)]);
+}
+
+// [この文字列を含む箇所(最初の1行目の直後)に, ログ行を挿入する]
+const DEBUG_PATCHES = [
+  ["\t,playStart: function() {\n\t\tthis.glow.setPosition(this.x,this.y);",
+    'window.__dbg&&window.__dbg("cover.playStart","dir="+(this.holdNote&&this.holdNote.noteDirection),"anims="+this.glow.animation.getAnimationList().length);'],
+  ["\t,playContinue: function() {\n\t\tthis.glow.animation.play(\"holdCover\"",
+    'window.__dbg&&window.__dbg("cover.playContinue","dir="+(this.holdNote&&this.holdNote.noteDirection));'],
+  ["\t,playEnd: function() {\n\t\tthis.glow.animation.play(\"holdCoverEnd\"",
+    'window.__dbg&&window.__dbg("cover.playEnd","dir="+(this.holdNote&&this.holdNote.noteDirection));'],
+  ["\t,kill: function() {\n\t\tflixel_group_FlxTypedSpriteGroup.prototype.kill.call(this);\n\t\tthis.set_visible(false);\n\t\tthis.holdNote.cover = null;",
+    'window.__dbg&&window.__dbg("cover.kill","holdNote="+(this.holdNote?"ok":"NULL"));'],
+  ["\t,playNoteHoldCover: function(holdNote) {\n\t\tif(!this.showNotesplash) {",
+    'window.__dbg&&window.__dbg("strum.playNoteHoldCover","isPlayer="+this.isPlayer,"dir="+(holdNote&&holdNote.noteDirection),"splash="+this.showNotesplash);'],
+  ["\t,kill: function() {\n\t\tflixel_FlxSprite.prototype.kill.call(this);\n\t\tvar tmp = this.cover;",
+    'window.__dbg&&window.__dbg("holdNote.kill","dir="+this.noteDirection,"hit="+this.hitNote,"missed="+this.missedNote,"cover="+(this.cover?"yes":"no"));'],
+  ["} else if(holdNote.hitNote && holdNote.sustainLength <= 0) {\n\t\t\t\tif(this.isPlayer) {\n\t\t\t\t\tthis.noteVibrations.tryHoldNoteVibration(true);",
+    'window.__dbg&&window.__dbg("strum.holdEnd","isPlayer="+this.isPlayer,"dir="+holdNote.noteDirection,"cover="+(holdNote.cover?"yes":"no"));'],
+  ["\t,processNotes: function(elapsed) {\n",
+    'window.__dbgTick&&window.__dbgTick("processNotes","bot="+this.isBotPlayMode);'],
+];
+// 1行目の直後ではなく「その場の直前」に差し込みたいもの(全出現を置換)
+const DEBUG_REPLACE_ALL = [
+  ["this.opponentStrumline.playNoteHoldCover(note.holdNoteSprite);",
+    'window.__dbg&&window.__dbg("OPP bot hold start","strumTime="+note.strumTime);this.opponentStrumline.playNoteHoldCover(note.holdNoteSprite);'],
+  ["this.playerStrumline.playNoteHoldCover(note.holdNoteSprite);",
+    'window.__dbg&&window.__dbg("PLAYER hold start","bot="+this.isBotPlayMode,"strumTime="+note.strumTime);this.playerStrumline.playNoteHoldCover(note.holdNoteSprite);'],
+];
+function patchGameJs(text) {
+  let missed = [];
+  for (const [anchor, code] of DEBUG_PATCHES) {
+    const i = text.indexOf(anchor);
+    if (i < 0) { missed.push(anchor.slice(0, 40).replace(/\s+/g, ' ')); continue; }
+    const nl = anchor.indexOf('\n');
+    const at = i + nl + 1;
+    text = text.slice(0, at) + '\t\t' + code + '\n' + text.slice(at);
+  }
+  for (const [find, repl] of DEBUG_REPLACE_ALL) {
+    if (text.indexOf(find) < 0) { missed.push(find.slice(0, 40)); continue; }
+    text = text.split(find).join(repl);
+  }
+  return {text, missed};
+}
+async function servePatchedGame(request) {
+  try {
+    const res = await fetch(request);
+    if (!res.ok) return res;
+    const {text, missed} = patchGameJs(await res.text());
+    const head = '(' + debugPrelude.toString() + ')();\n' + (missed.length ? 'window.__dbgMissed=' + JSON.stringify(missed) + ';\n' : '');
+    return new Response(head + text, {status: 200, headers: {'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store'}});
+  } catch (e) {
+    return fetch(request);
+  }
+}
