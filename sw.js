@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v35-github';
+const CACHE_NAME = 'funkin-assets-v36-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -209,7 +209,7 @@ function buildManifest(){
     const id = 'assets/' + file;
     if (!seen.has(id)) {
       seen.add(id);
-      m.assets.push({id, path: '../assets/' + file, type, size: 0});
+      m.assets.push({id, path: '../assets/' + file, type, size: 0, preload: true});
     }
   }
   const sserafimFiles = [
@@ -245,7 +245,7 @@ function buildManifest(){
     const id = 'assets/' + file;
     if (!seen.has(id)) {
       seen.add(id);
-      m.assets.push({id, path: '../assets/' + file, type, size: 0, preload: type !== 'SOUND'});
+      m.assets.push({id, path: '../assets/' + file, type, size: 0, preload: true});
     }
   }
   manifestJson = JSON.stringify(m);
