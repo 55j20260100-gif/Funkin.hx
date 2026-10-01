@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v34-github';
+const CACHE_NAME = 'funkin-assets-v35-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -84,7 +84,7 @@ async function resolveAsset(relativePath) {
     const rest = relativePath.slice('shared/'.length);
     candidates.push(CDN + 'shared/images/' + rest, CDN + 'shared/' + rest, CDN + 'preload/images/' + rest);
   }
-  else if (/^(preload|week\d+|weekend\d+)\//i.test(relativePath)) {
+  else if (/^(preload|week\d+|weekend\d+|sserafim)\//i.test(relativePath)) {
     const parts = relativePath.split('/');
     const library = parts.shift();
     const libraryPath = parts.join('/');
@@ -210,6 +210,42 @@ function buildManifest(){
     if (!seen.has(id)) {
       seen.add(id);
       m.assets.push({id, path: '../assets/' + file, type, size: 0});
+    }
+  }
+  const sserafimFiles = [
+    ['sserafim/images/back-stools.png', 'IMAGE'], ['sserafim/images/back-tables.png', 'IMAGE'],
+    ['sserafim/images/bg.png', 'IMAGE'], ['sserafim/images/cutscene/bfGetUp/Animation.json', 'TEXT'],
+    ['sserafim/images/cutscene/bfGetUp/spritemap1.json', 'TEXT'], ['sserafim/images/cutscene/bfGetUp/spritemap1.png', 'IMAGE'],
+    ['sserafim/images/cutscene/burger-cutscene.png', 'IMAGE'], ['sserafim/images/cutscene/counter-stretch.png', 'IMAGE'],
+    ['sserafim/images/cutscene/cutsceneMain/Animation.json', 'TEXT'],
+    ['sserafim/images/cutscene/cutsceneMain/spritemap1.json', 'TEXT'],
+    ['sserafim/images/cutscene/cutsceneMain/spritemap1.png', 'IMAGE'],
+    ['sserafim/images/cutscene/floor-cutscene.png', 'IMAGE'],
+    ['sserafim/images/cutscene/gfGetUp/Animation.json', 'TEXT'],
+    ['sserafim/images/cutscene/gfGetUp/spritemap1.json', 'TEXT'],
+    ['sserafim/images/cutscene/gfGetUp/spritemap1.png', 'IMAGE'],
+    ['sserafim/images/dust/dustBack.png', 'IMAGE'], ['sserafim/images/dust/dustFront.png', 'IMAGE'],
+    ['sserafim/images/dust/dustMid.png', 'IMAGE'], ['sserafim/images/end/end1.png', 'IMAGE'],
+    ['sserafim/images/end/end2.png', 'IMAGE'], ['sserafim/images/floor.png', 'IMAGE'],
+    ['sserafim/images/front-stool.png', 'IMAGE'], ['sserafim/images/lights/back-light-color.png', 'IMAGE'],
+    ['sserafim/images/lights/back-light-white.png', 'IMAGE'], ['sserafim/images/lights/truck-light1.png', 'IMAGE'],
+    ['sserafim/images/lights/truck-light2.png', 'IMAGE'],
+    ['sserafim/images/sserafim-lipsync-yunjin/Animation.json', 'TEXT'],
+    ['sserafim/images/sserafim-lipsync-yunjin/spritemap1.json', 'TEXT'],
+    ['sserafim/images/sserafim-lipsync-yunjin/spritemap1.png', 'IMAGE'],
+    ['sserafim/images/sserafim-lipsync/Animation.json', 'TEXT'],
+    ['sserafim/images/sserafim-lipsync/spritemap1.json', 'TEXT'],
+    ['sserafim/images/sserafim-lipsync/spritemap1.png', 'IMAGE'],
+    ['sserafim/images/truck-door.png', 'IMAGE'], ['sserafim/images/truck-stuff.png', 'IMAGE'],
+    ['sserafim/sounds/cutscene/end1.mp3', 'SOUND'], ['sserafim/sounds/cutscene/end2.mp3', 'SOUND'],
+    ['sserafim/sounds/cutscene/startCutscene.mp3', 'SOUND'], ['sserafim/sounds/doorKick1.mp3', 'SOUND'],
+    ['sserafim/sounds/doorKick2.mp3', 'SOUND']
+  ];
+  for (const [file, type] of sserafimFiles) {
+    const id = 'assets/' + file;
+    if (!seen.has(id)) {
+      seen.add(id);
+      m.assets.push({id, path: '../assets/' + file, type, size: 0, preload: type !== 'SOUND'});
     }
   }
   manifestJson = JSON.stringify(m);
