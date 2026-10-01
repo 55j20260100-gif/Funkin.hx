@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v33-github';
+const CACHE_NAME = 'funkin-assets-v34-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -88,7 +88,8 @@ async function resolveAsset(relativePath) {
     const parts = relativePath.split('/');
     const library = parts.shift();
     const libraryPath = parts.join('/');
-    candidates.push(CDN + library + '/images/' + libraryPath, CDN + relativePath, CDN + 'preload/images/' + libraryPath);
+    const directory = /^(images|sounds|music|data)\//i.test(libraryPath) ? '' : 'images/';
+    candidates.push(CDN + library + '/' + directory + libraryPath, CDN + relativePath, CDN + 'preload/' + directory + libraryPath);
   }
   else candidates.push(CDN + 'preload/' + relativePath, CDN + 'shared/' + relativePath);
   if (fontFallback) candidates.push(fontFallback);
@@ -161,6 +162,50 @@ function buildManifest(){
     ['week6/images/pixelNoteHoldCover.xml', 'TEXT']
   ];
   for (const [file, type] of pixelAtlases) {
+    const id = 'assets/' + file;
+    if (!seen.has(id)) {
+      seen.add(id);
+      m.assets.push({id, path: '../assets/' + file, type, size: 0});
+    }
+  }
+  const weekendSounds = [
+    ['weekend1/sounds/Darnell_Lighter.mp3', 'SOUND'],
+    ['weekend1/sounds/Gun_Prep.mp3', 'SOUND'],
+    ['weekend1/sounds/Kick_Can_FORWARD.mp3', 'SOUND'],
+    ['weekend1/sounds/Kick_Can_UP.mp3', 'SOUND'],
+    ['weekend1/sounds/Lightning1.mp3', 'SOUND'],
+    ['weekend1/sounds/Lightning2.mp3', 'SOUND'],
+    ['weekend1/sounds/Lightning3.mp3', 'SOUND'],
+    ['weekend1/sounds/Pico_Bonk.mp3', 'SOUND'],
+    ['weekend1/sounds/Shoot_1.mp3', 'SOUND'],
+    ['weekend1/sounds/carAmbience.mp3', 'SOUND'],
+    ['weekend1/sounds/cutscene/darnell_laugh.mp3', 'SOUND'],
+    ['weekend1/sounds/cutscene/nene_laugh.mp3', 'SOUND'],
+    ['weekend1/sounds/fuse_burning.mp3', 'SOUND'],
+    ['weekend1/sounds/gameplay/gameover/fnf_loss_sfx-pico-explode.mp3', 'SOUND'],
+    ['weekend1/sounds/gameplay/gameover/fnf_loss_sfx-pico-gutpunch.mp3', 'SOUND'],
+    ['weekend1/sounds/rainAmbience.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop1.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop2.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop3.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop4.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop5.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop6.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop7.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop8.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop9.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop10.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop11.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop12.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop13.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop14.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop15.mp3', 'SOUND'],
+    ['weekend1/sounds/raindrops/raindrop16.mp3', 'SOUND'],
+    ['weekend1/sounds/shot1.mp3', 'SOUND'], ['weekend1/sounds/shot2.mp3', 'SOUND'],
+    ['weekend1/sounds/shot3.mp3', 'SOUND'], ['weekend1/sounds/shot4.mp3', 'SOUND'],
+    ['weekend1/sounds/singed_loop.mp3', 'SOUND']
+  ];
+  for (const [file, type] of weekendSounds) {
     const id = 'assets/' + file;
     if (!seen.has(id)) {
       seen.add(id);
