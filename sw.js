@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v28-github';
+const CACHE_NAME = 'funkin-assets-v29-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -94,7 +94,7 @@ async function resolveAsset(relativePath) {
   // loader treats that as a successful load and can wait forever during the
   // final game loading phase. A real 404 lets the bundle fail gracefully.
   // preload 対象の shared 音声(sounds/ と music/gameplay/)が欠けても読込全体を止めないよう、無音WAVを返す。
-  if (/\.(mp3|ogg|wav)$/i.test(basename) && /^shared\/(sounds\/|music\/gameplay\/)/i.test(relativePath)) return silentWav();
+  if (/\.(mp3|ogg|wav)$/i.test(basename) && /^shared\/(sounds\/|music\/gameplay\/|music\/breakfast)/i.test(relativePath)) return silentWav();
   if (/\.(mp3|ogg|wav)$/i.test(basename)) return new Response('', {status:404,headers:{'Content-Type':'audio/mpeg'}});
   if (/\.json$/i.test(basename)) return new Response('{}', {status:404,headers:{'Content-Type':'application/json'}});
   return new Response('Official asset not found: '+relativePath, {status:404,headers:{'Content-Type':'text/plain;charset=utf-8'}});
@@ -129,7 +129,7 @@ function buildSharedManifest(){
   if (sharedManifestJson) return sharedManifestJson;
   const m = JSON.parse(buildManifest());
   for (const a of m.assets) {
-    if (typeof a.id === 'string' && a.id.startsWith('assets/shared/') && /^\.\.\/assets\/shared\//.test(a.path || '') && (a.type === 'IMAGE' || a.type === 'TEXT' || ((a.type === 'SOUND' || a.type === 'MUSIC') && /^\.\.\/assets\/shared\/(sounds\/|music\/gameplay\/)/.test(a.path)))) a.preload = true;
+    if (typeof a.id === 'string' && a.id.startsWith('assets/shared/') && /^\.\.\/assets\/shared\//.test(a.path || '') && (a.type === 'IMAGE' || a.type === 'TEXT' || ((a.type === 'SOUND' || a.type === 'MUSIC') && /^\.\.\/assets\/shared\/(sounds\/|music\/gameplay\/|music\/breakfast)/.test(a.path)))) a.preload = true;
   }
   sharedManifestJson = JSON.stringify(m);
   return sharedManifestJson;
