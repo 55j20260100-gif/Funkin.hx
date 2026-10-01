@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v37-github';
+const CACHE_NAME = 'funkin-assets-v38-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -272,6 +272,18 @@ function buildManifest(){
       seen.add(id);
       m.assets.push({id, path: '../assets/' + file, type, size: 0, preload: true});
     }
+  }
+  const tankmanVocals = [
+    'songs/guns/Voices-tankman.mp3', 'songs/guns/Voices-tankman-pico.mp3',
+    'songs/stress/Voices-tankman.mp3', 'songs/stress/Voices-tankman-pico.mp3',
+    'songs/ugh/Voices-tankman.mp3', 'songs/ugh/Voices-tankman-pico.mp3',
+    'songs/ugh/Voices-tankman-erect.mp3'
+  ];
+  for (const file of tankmanVocals) {
+    const id = 'assets/' + file;
+    const existing = m.assets.find(a => a.id === id);
+    if (existing) existing.preload = true;
+    else m.assets.push({id, path: '../assets/' + file, type: 'SOUND', size: 0, preload: true});
   }
   manifestJson = JSON.stringify(m);
   return manifestJson;
