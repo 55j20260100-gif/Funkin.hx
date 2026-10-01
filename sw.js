@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v24-github';
+const CACHE_NAME = 'funkin-assets-v25-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -49,7 +49,6 @@ async function resolveAsset(relativePath) {
   const legacy = {'default.png':'preload/images/fonts/default.png','circle.png':'preload/images/pauseCircle.png','button.png':'preload/images/backButton.png','vcr-bmp.fnt':'fonts/vcr-bmp.fnt','vcr-bmp.png':'fonts/vcr-bmp.png','flixel.mp3':'preload/sounds/CS_select.mp3','beep.mp3':'preload/sounds/CS_select.mp3'};
     // Keep the engine's own VCR face on desktop; replacing vcr.ttf with a UI
   // font changes Canvas/Lime glyph metrics and makes the game look wrong.
-  if (fontUrl && isFont && (relativePath.startsWith('fonts/') || relativePath.startsWith('flixel/fonts/'))) candidates.push(fontUrl);
   if (modBase) candidates.push(modBase + relativePath);
   if (runtimeBase) {
     if (engine === 'psych' || engine === 'manny') candidates.push(runtimeBase + 'shared/' + relativePath, runtimeBase + relativePath);
@@ -58,6 +57,9 @@ async function resolveAsset(relativePath) {
   }
   if (legacy[basename]) candidates.push(CDN + legacy[basename]);
   if (relativePath.startsWith('fonts/')) candidates.push(CDN + relativePath, CDN + 'preload/' + relativePath, CDN + 'shared/' + relativePath);
+  // fontUrl (bundled vcr-bold.ttf etc.) is only a last-resort fallback. Putting it first replaced
+  // vcr.ttf / vcr-italic.ttf with the Bold face, so the game text looked like a different font.
+  const fontFallback = (fontUrl && isFont && (relativePath.startsWith('fonts/') || relativePath.startsWith('flixel/fonts/'))) ? fontUrl : '';
   // Map the engine's virtual assets/data path directly to the official CDN.
   // This avoids waiting for several guaranteed 404 fallbacks on desktop.
   if (relativePath.startsWith('data/')) candidates.push(CDN + 'preload/' + relativePath, CDN + 'shared/' + relativePath, CDN + relativePath);
@@ -72,12 +74,13 @@ async function resolveAsset(relativePath) {
   }
   else if (/^(preload|week\d+|weekend\d+)\//i.test(relativePath)) candidates.push(CDN + relativePath);
   else candidates.push(CDN + 'preload/' + relativePath, CDN + 'shared/' + relativePath);
+  if (fontFallback) candidates.push(fontFallback);
   const cache = await caches.open(CACHE_NAME);
   for (const url of candidates) {
     const cached = await cache.match(url);
     if (cached) return cached;
     try {
-      const response = await fetch(url, {mode:'cors', credentials:'omit', signal:AbortSignal.timeout(5000)});
+      const response = await fetch(url, {mode:'cors', credentials:'omit', signal:AbortSignal.timeout(20000)});
       if (response.ok) { cache.put(url, response.clone()).catch(() => {}); return response; }
     } catch (_) {}
   }
@@ -89,10 +92,31 @@ async function resolveAsset(relativePath) {
   if (/\.json$/i.test(basename)) return new Response('{}', {status:404,headers:{'Content-Type':'application/json'}});
   return new Response('Official asset not found: '+relativePath, {status:404,headers:{'Content-Type':'text/plain;charset=utf-8'}});
 }
+let manifestJson = null;
+function buildManifest(){
+  if (manifestJson) return manifestJson;
+  const m = JSON.parse(UNIVERSAL_MANIFEST);
+  const seen = new Set(m.assets.map(a => a.id));
+  const extra = [];
+  for (const a of m.assets) {
+    // Paths such as shared:assets/shared/images/noteStrumline.png are looked up in the "shared"
+    // library as the symbol assets/shared/images/noteStrumline.png. The official layout has no
+    // such IDs here, so add them (same file, no extra download).
+    const hit = /^\.\.\/assets\/shared\/(.+)$/.exec(a.path || '');
+    if (!hit) continue;
+    const id = 'assets/shared/' + hit[1];
+    if (seen.has(id)) continue;
+    seen.add(id);
+    extra.push({id, path: a.path, type: a.type, size: a.size});
+  }
+  m.assets = m.assets.concat(extra);
+  manifestJson = JSON.stringify(m);
+  return manifestJson;
+}
 async function resolveManifest(name){
   // Every generated OpenFL library is backed by the same official asset tree.
   // This prevents song/stage libraries from stalling when their generated manifest is absent.
-  return new Response(UNIVERSAL_MANIFEST, {status:200, headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
+  return new Response(buildManifest(), {status:200, headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
 }
 function transparentPng(){const bytes=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='),c=>c.charCodeAt(0));return new Response(bytes,{status:200,headers:{'Content-Type':'image/png','Cache-Control':'public,max-age=31536000'}})}
 function faviconSvg(){return new Response('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#171827"/><path d="M14 18h36v8H22v7h22v8H22v13h-8z" fill="#ff4fa3"/><circle cx="47" cy="47" r="6" fill="#43d9ff"/></svg>',{status:200,headers:{'Content-Type':'image/svg+xml','Cache-Control':'public,max-age=31536000'}})}
