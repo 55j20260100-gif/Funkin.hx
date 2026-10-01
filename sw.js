@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v27-github';
+const CACHE_NAME = 'funkin-assets-v28-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -93,6 +93,8 @@ async function resolveAsset(relativePath) {
   // Do not return an empty 200 response for missing audio/JSON. OpenFL's
   // loader treats that as a successful load and can wait forever during the
   // final game loading phase. A real 404 lets the bundle fail gracefully.
+  // preload 対象の shared 音声(sounds/ と music/gameplay/)が欠けても読込全体を止めないよう、無音WAVを返す。
+  if (/\.(mp3|ogg|wav)$/i.test(basename) && /^shared\/(sounds\/|music\/gameplay\/)/i.test(relativePath)) return silentWav();
   if (/\.(mp3|ogg|wav)$/i.test(basename)) return new Response('', {status:404,headers:{'Content-Type':'audio/mpeg'}});
   if (/\.json$/i.test(basename)) return new Response('{}', {status:404,headers:{'Content-Type':'application/json'}});
   return new Response('Official asset not found: '+relativePath, {status:404,headers:{'Content-Type':'text/plain;charset=utf-8'}});
@@ -127,7 +129,7 @@ function buildSharedManifest(){
   if (sharedManifestJson) return sharedManifestJson;
   const m = JSON.parse(buildManifest());
   for (const a of m.assets) {
-    if (typeof a.id === 'string' && a.id.startsWith('assets/shared/') && /^\.\.\/assets\/shared\//.test(a.path || '') && (a.type === 'IMAGE' || a.type === 'TEXT')) a.preload = true;
+    if (typeof a.id === 'string' && a.id.startsWith('assets/shared/') && /^\.\.\/assets\/shared\//.test(a.path || '') && (a.type === 'IMAGE' || a.type === 'TEXT' || ((a.type === 'SOUND' || a.type === 'MUSIC') && /^\.\.\/assets\/shared\/(sounds\/|music\/gameplay\/)/.test(a.path)))) a.preload = true;
   }
   sharedManifestJson = JSON.stringify(m);
   return sharedManifestJson;
@@ -138,5 +140,6 @@ async function resolveManifest(name){
   const body = /^shared(\.json)?$/i.test(String(name).split('?')[0]) ? buildSharedManifest() : buildManifest();
   return new Response(body, {status:200, headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
 }
+function silentWav(){const sr=8000,n=800,b=new Uint8Array(44+n),v=new DataView(b.buffer);const w=(o,t)=>{for(let i=0;i<t.length;i++)b[o+i]=t.charCodeAt(i)};w(0,'RIFF');v.setUint32(4,36+n,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,sr,true);v.setUint32(28,sr,true);v.setUint16(32,1,true);v.setUint16(34,8,true);w(36,'data');v.setUint32(40,n,true);b.fill(128,44);return new Response(b,{status:200,headers:{'Content-Type':'audio/wav'}})}
 function transparentPng(){const bytes=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='),c=>c.charCodeAt(0));return new Response(bytes,{status:200,headers:{'Content-Type':'image/png','Cache-Control':'public,max-age=31536000'}})}
 function faviconSvg(){return new Response('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#171827"/><path d="M14 18h36v8H22v7h22v8H22v13h-8z" fill="#ff4fa3"/><circle cx="47" cy="47" r="6" fill="#43d9ff"/></svg>',{status:200,headers:{'Content-Type':'image/svg+xml','Cache-Control':'public,max-age=31536000'}})}
