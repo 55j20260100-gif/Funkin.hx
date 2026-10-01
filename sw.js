@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v32-github';
+const CACHE_NAME = 'funkin-assets-v33-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -84,7 +84,12 @@ async function resolveAsset(relativePath) {
     const rest = relativePath.slice('shared/'.length);
     candidates.push(CDN + 'shared/images/' + rest, CDN + 'shared/' + rest, CDN + 'preload/images/' + rest);
   }
-  else if (/^(preload|week\d+|weekend\d+)\//i.test(relativePath)) candidates.push(CDN + relativePath);
+  else if (/^(preload|week\d+|weekend\d+)\//i.test(relativePath)) {
+    const parts = relativePath.split('/');
+    const library = parts.shift();
+    const libraryPath = parts.join('/');
+    candidates.push(CDN + library + '/images/' + libraryPath, CDN + relativePath, CDN + 'preload/images/' + libraryPath);
+  }
   else candidates.push(CDN + 'preload/' + relativePath, CDN + 'shared/' + relativePath);
   if (fontFallback) candidates.push(fontFallback);
   const cache = await caches.open(CACHE_NAME);
@@ -145,6 +150,21 @@ function buildManifest(){
     if (!seen.has(id)) {
       seen.add(id);
       m.assets.push({id, path: '../assets/videos/videos/' + file, type: 'BINARY', size: 0});
+    }
+  }
+  const pixelAtlases = [
+    ['week6/weeb/pixelUI/arrows-pixels.png', 'IMAGE'],
+    ['week6/weeb/pixelUI/arrows-pixels.xml', 'TEXT'],
+    ['week6/images/pixelNoteSplash.png', 'IMAGE'],
+    ['week6/images/pixelNoteSplash.xml', 'TEXT'],
+    ['week6/images/pixelNoteHoldCover.png', 'IMAGE'],
+    ['week6/images/pixelNoteHoldCover.xml', 'TEXT']
+  ];
+  for (const [file, type] of pixelAtlases) {
+    const id = 'assets/' + file;
+    if (!seen.has(id)) {
+      seen.add(id);
+      m.assets.push({id, path: '../assets/' + file, type, size: 0});
     }
   }
   manifestJson = JSON.stringify(m);
