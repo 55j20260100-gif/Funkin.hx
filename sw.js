@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v41-github';
+const CACHE_NAME = 'funkin-assets-v45-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -442,15 +442,25 @@ function buildManifest(){
     ['weekend1/sounds/shot4.mp3','SOUND'], ['weekend1/sounds/shot4.ogg','SOUND'], ['weekend1/sounds/singed_loop.mp3','SOUND'],
     ['weekend1/sounds/singed_loop.ogg','SOUND']
   ];
-  // Keep memory low: audio stays lazy (decoding dozens of mp3s at once crashed the tab), and the heavy
-  // week7 erect/cutscene art is only fetched when actually used. Only light images/text are preloaded.
+  // Keep memory low, but remember Lime HTML5 can only getSound()/getBitmapData() SYNCHRONOUSLY for preloaded assets
+  // (scripts call FunkinSound.load(Paths.sound(..)) directly; otherwise: 'exists, but only asynchronously').
+  // So: preload light images/text and small .mp3 files; leave .ogg duplicates, huge audio, week7 gameover
+  // voice banks and week7 erect/cutscene art lazy (that is what crashed the tab).
+  const lazyBig = new Set([
+    'week6/music/breakfast-pixel/breakfast-pixel.mp3', 'week6/music/breakfast-pixel.mp3', 'week6/music/Lunchbox.mp3',
+    'week7/music/DISTORTO.mp3', 'week7/sounds/stressCutscene.mp3', 'week7/sounds/song3censor.mp3'
+  ]);
   for (const [file, type] of weekLibraryFiles) {
     const id = 'assets/' + file;
-    if (!seen.has(id)) {
-      seen.add(id);
-      const light = (type === 'IMAGE' || type === 'TEXT') && !/^week7\/.*\/(erect|cutscene|masks)\//i.test(file);
-      m.assets.push({id, path: '../assets/' + file, type, size: 0, preload: light});
-    }
+    if (seen.has(id)) continue;
+    seen.add(id);
+    let preload;
+    if (type === 'IMAGE' || type === 'TEXT') {
+      preload = !/^week7\/.*\/(erect|cutscene|masks)\//i.test(file);
+    } else if (type === 'SOUND' || type === 'MUSIC') {
+      preload = /\.mp3$/i.test(file) && !lazyBig.has(file) && !/^week7\/sounds\/(jeffGameover|erect)/i.test(file);
+    } else preload = false;
+    m.assets.push({id, path: '../assets/' + file, type, size: 0, preload});
   }
   const tankmanVocals = [
     'songs/guns/Voices-tankman.mp3', 'songs/guns/Voices-tankman-pico.mp3',
@@ -602,6 +612,14 @@ const DEBUG_PATCHES = [
 ];
 // 1行目の直後ではなく「その場の直前」に差し込みたいもの(全出現を置換)
 const DEBUG_REPLACE_ALL = [
+  ["this.__video.src = url;",
+    "if(typeof(url)==\"string\"&&/\\.mkv(\\?|$)/i.test(url)&&window.__mkvToMp4){var _ns=this,_v=this.__video;window.__mkvToMp4(url).then(function(u){if(_ns.__video===_v&&!_ns.__closed){_v.src=u;var p=_v.play();if(p&&p.catch)p.catch(function(e){window.__dbg&&window.__dbg(\"video play rejected\",String(e));});}}).catch(function(){if(_ns.__video===_v)_v.src=url;});return;}this.__video.src = url;"],
+  // Video cutscenes: some official videos are .mkv, which Safari/Firefox cannot play. Without this the cutscene hangs
+  // and video.play() rejects (seen when resuming from the pause menu). Swallow play() rejections and skip a broken video.
+  ["this.__video.play();",
+    "(function(v){var p=v.play();if(p&&p.catch)p.catch(function(e){window.__dbg&&window.__dbg(\"video play rejected\",String(e));});})(this.__video);"],
+  ["this.netStream.play(videoPath);",
+    "var _fv=this,_fvDone=false;this.netStream.__video.addEventListener(\"error\",function(){if(_fvDone||!_fv.netStream||_fv.netStream.__closed||!_fv.netStream.__video)return;_fvDone=true;window.__dbg&&window.__dbg(\"video error, skipping cutscene\",String(videoPath));_fv.finishVideo();});this.netStream.play(videoPath);"],
   ["this.opponentStrumline.playNoteHoldCover(note.holdNoteSprite);",
     'window.__dbg&&window.__dbg("OPP bot hold start","strumTime="+note.strumTime);this.opponentStrumline.playNoteHoldCover(note.holdNoteSprite);'],
   ["this.playerStrumline.playNoteHoldCover(note.holdNoteSprite);",
@@ -622,12 +640,95 @@ function patchGameJs(text) {
   }
   return {text, missed};
 }
+// ===================== MKV -> MP4 (in the browser, ffmpeg.wasm core) =====================
+// Official ugh/guns/stress cutscenes are .mkv with Vorbis audio, which Safari/Firefox cannot play.
+// This is stringified and injected ahead of Funkin.js. The video track is copied untouched, only the audio
+// is re-encoded to AAC, inside a throw-away Worker (freed afterwards). The result is cached in Cache Storage.
+function mkvPrelude() {
+  var CORE = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js';
+  var WASM = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm';
+  var CACHE = 'funkin-mp4-v1';
+  var pending = {};
+  function workerMain() {
+    self.onmessage = function (e) {
+      var d = e.data;
+      (async function () {
+        try {
+          importScripts(d.core);
+          var wasmBinary = await (await fetch(d.wasm)).arrayBuffer();
+          var errs = [];
+          var core = await createFFmpegCore({ wasmBinary: wasmBinary, print: function () {}, printErr: function (l) { errs.push(l); } });
+          core.FS.writeFile('in.mkv', new Uint8Array(d.input));
+          core.exec.apply(core, d.args);
+          if (core.ret !== 0) throw new Error('ffmpeg exit ' + core.ret + ': ' + errs.slice(-3).join(' | '));
+          var copy = new Uint8Array(core.FS.readFile('out.mp4')).buffer;
+          postMessage({ ok: true, out: copy }, [copy]);
+        } catch (err) {
+          postMessage({ ok: false, err: String((err && err.message) || err) });
+        }
+      })();
+    };
+  }
+  function overlay(msg) {
+    var el = document.getElementById('__mkvOv');
+    if (!msg) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = '__mkvOv';
+      el.style.cssText = 'position:fixed;left:0;right:0;bottom:14px;text-align:center;color:#fff;font:14px sans-serif;z-index:99999;pointer-events:none;text-shadow:0 0 4px #000';
+      (document.body || document.documentElement).appendChild(el);
+    }
+    el.textContent = msg;
+  }
+  function log() { try { window.__dbg && window.__dbg.apply(null, arguments); } catch (e) {} }
+  window.__mkvToMp4 = function (url) {
+    var name = String(url).split('?')[0].split('/').pop();
+    if (pending[name]) return pending[name];
+    var p = (async function () {
+      var key = 'https://mkv2mp4.local/' + name;
+      var cache = null;
+      try {
+        cache = await caches.open(CACHE);
+        var hit = await cache.match(key);
+        if (hit) { log('mkv cache hit', name); return URL.createObjectURL(await hit.blob()); }
+      } catch (e) {}
+      overlay('動画を変換中… (初回のみ)');
+      var w = null;
+      try {
+        var res = await fetch(url);
+        if (!res.ok) throw new Error('fetch ' + res.status);
+        var input = await res.arrayBuffer();
+        w = new Worker(URL.createObjectURL(new Blob(['(' + workerMain.toString() + ')()'], { type: 'text/javascript' })));
+        var t0 = Date.now();
+        var out = await new Promise(function (resolve, reject) {
+          w.onmessage = function (e) { e.data.ok ? resolve(e.data.out) : reject(new Error(e.data.err)); };
+          w.onerror = function (e) { reject(new Error((e && e.message) || 'worker error')); };
+          w.postMessage({
+            core: CORE, wasm: WASM, input: input,
+            args: ['-i', 'in.mkv', '-map', '0:v:0', '-map', '0:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', 'out.mp4']
+          }, [input]);
+        });
+        log('mkv converted', name, (Date.now() - t0) + 'ms', out.byteLength + 'B');
+        var blob = new Blob([out], { type: 'video/mp4' });
+        try { if (cache) await cache.put(key, new Response(blob, { headers: { 'Content-Type': 'video/mp4' } })); } catch (e) {}
+        return URL.createObjectURL(blob);
+      } finally {
+        if (w) w.terminate();
+        overlay(null);
+      }
+    })();
+    pending[name] = p;
+    p.catch(function (e) { delete pending[name]; log('mkv convert failed', name, String(e)); });
+    return p;
+  };
+}
+
 async function servePatchedGame(request) {
   try {
     const res = await fetch(request);
     if (!res.ok) return res;
     const {text, missed} = patchGameJs(await res.text());
-    const head = '(' + debugPrelude.toString() + ')();\n' + (missed.length ? 'window.__dbgMissed=' + JSON.stringify(missed) + ';\n' : '');
+    const head = '(' + debugPrelude.toString() + ')();\n(' + mkvPrelude.toString() + ')();\n' + (missed.length ? 'window.__dbgMissed=' + JSON.stringify(missed) + ';\n' : '');
     return new Response(head + text, {status: 200, headers: {'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store'}});
   } catch (e) {
     return fetch(request);
