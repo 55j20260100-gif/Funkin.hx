@@ -50,9 +50,11 @@ function loadGameBundle(){
   script.src = bundleUrl;
   script.onload = () => {
     try {
-      if(window.lime && typeof window.lime.embed === 'function') {
+      const limeApi = window.lime || (window.exports && window.exports.lime);
+      if(limeApi && typeof limeApi.embed === 'function') {
+        window.lime = limeApi;
         setHint('ゲームを起動中…');
-        window.lime.embed('Funkin','openfl-content',1280,720,{resizable:true});
+        limeApi.embed('Funkin','openfl-content',1280,720,{resizable:true});
       } else setHint('Funkin.js のLime embed APIが見つかりません。');
     } catch(e) { setHint('起動エラー: ' + e.message); console.error(e); }
   };
