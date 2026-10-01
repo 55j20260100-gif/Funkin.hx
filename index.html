@@ -6,6 +6,35 @@
 const hint = document.getElementById('hint');
 function setHint(text){ hint.firstChild.textContent = text + ' '; }
 
+// 100秒間操作がなければ、このゲーム画面を自動終了する。
+// window.close() はブラウザ仕様上、scriptで開かれたタブでのみ成功するため、
+// 通常のタブでは about:blank へ移動して画面を閉じた状態にする。
+const IDLE_CLOSE_MS = 100000;
+let idleTimer = 0;
+let lastActivity = 0;
+function closeIdlePage(){
+  try { window.close(); } catch (_) {}
+  setTimeout(() => {
+    if (!document.hidden) {
+      try { location.replace('about:blank'); } catch (_) {
+        document.body.replaceChildren();
+        document.body.style.background = '#000';
+      }
+    }
+  }, 300);
+}
+function resetIdleClose(){
+  const now = Date.now();
+  if (now - lastActivity < 250) return;
+  lastActivity = now;
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(closeIdlePage, IDLE_CLOSE_MS);
+}
+['pointerdown','keydown','wheel','touchstart','mousemove'].forEach(type => {
+  window.addEventListener(type, resetIdleClose, {passive:true});
+});
+resetIdleClose();
+
 // Funkin.js の Lime/OpenFL はフォントを「名前」だけで参照し、@font-face は作らない。
 // ページ側に同名の定義が無いとブラウザ標準のセリフ体になるため、VCR を同名で登録する。
 async function registerGameFonts(){
