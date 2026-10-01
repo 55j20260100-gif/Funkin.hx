@@ -584,7 +584,7 @@ function debugPrelude() {
     bar.appendChild(mk('button', bs, '閉じる', function () { panel.style.display = 'none'; }));
     pre = mk('pre', 'margin:0;height:calc(100% - 48px);overflow:auto;font:11px/1.35 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all');
     panel.appendChild(bar); panel.appendChild(pre);
-    document.body.appendChild(panel); document.body.appendChild(btn);
+    document.body.appendChild(panel); // ログUIは内部保持し、画面上のLOGボタンは表示しない。
   }
   if (document.body) ui(); else document.addEventListener('DOMContentLoaded', ui);
   setTimeout(ui, 1500);
