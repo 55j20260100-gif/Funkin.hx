@@ -9,15 +9,16 @@ function setHint(text){ hint.firstChild.textContent = text + ' '; }
 // Funkin.js の Lime/OpenFL はフォントを「名前」だけで参照し、@font-face は作らない。
 // ページ側に同名の定義が無いとブラウザ標準のセリフ体になるため、VCR を同名で登録する。
 async function registerGameFonts(){
-  const faces = [
-    ['VCR OSD Mono',             './assets/fonts/vcr.ttf'],
-    ['VCR OSD Mono Bold',        './assets/fonts/vcr-bold.ttf'],
-    ['VCR OSD Mono Italic',      './assets/fonts/vcr-italic.ttf'],
-    ['VCR OSD Mono Bold Italic', './assets/fonts/vcr-bolditalic.ttf'],
-    // Flixel 既定フォント等、未登録のままだとセリフ体になる名前も VCR に寄せる
-    ['Nokia Cellphone FC Small', './assets/fonts/vcr.ttf'],
-    ['Monsterrat',               './assets/fonts/vcr.ttf']
+  const V = './assets/fonts/vcr.ttf';
+  const names = [
+    'VCR OSD Mono','VCR OSD Mono Bold','VCR OSD Mono Italic','VCR OSD Mono Bold Italic',
+    // 曲名(フリープレイ)・BOYFRIEND などが使う名前。未登録だとセリフ体になるので全部VCRにする
+    '5by7','5by7 Bold','Consolas Italic','DS-Digital','DS-Digital Bold','DS-Digital Italic','DS-Digital Bold Italic',
+    'Inconsolata Black','Inconsolata Bold','Inconsolata ExtraBold','Inconsolata ExtraLight','Inconsolata Medium',
+    'Inconsolata Regular','Inconsolata SemiBold','Quantico','Quantico-Bold','Quantico-Italic','Quantico-BoldItalic',
+    'Share Tech Mono','YoureGone-Regular','Nokia Cellphone FC Small','Monsterrat'
   ];
+  const faces = names.map(n => [n, /Bold/i.test(n) && !/Italic/i.test(n) ? './assets/fonts/vcr-bold.ttf' : V]);
   const jobs = [];
   for (const [family, url] of faces) {
     for (const style of ['normal', 'italic']) {
@@ -61,7 +62,7 @@ function loadGameBundle(){
 (async function(){
   if (!('serviceWorker' in navigator)) { setHint('このブラウザはService Worker非対応です。'); await registerGameFonts(); loadGameBundle(); return; }
   try {
-    const registration = await navigator.serviceWorker.register('./sw.js?v=26', {scope:'./'});
+    const registration = await navigator.serviceWorker.register('./sw.js?v=27', {scope:'./'});
     await registration.update();
     await navigator.serviceWorker.ready;
     // 新規訪問時も確実に現在のページを制御させる。
