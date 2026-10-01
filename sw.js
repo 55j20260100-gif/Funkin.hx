@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v31-github';
+const CACHE_NAME = 'funkin-assets-v32-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -73,8 +73,10 @@ async function resolveAsset(relativePath) {
   // The game requests videos as assets/videos/<name>, while the official
   // repository stores them under videos/videos/<name>.
   else if (relativePath.startsWith('videos/')) {
-    const videoPath = relativePath.slice('videos/'.length);
-    candidates.push(CDN + 'videos/videos/' + videoPath, CDN + 'videos/' + relativePath, CDN + relativePath);
+    // Paths.videos() may already produce videos/videos/<name> when the
+    // library-qualified path is passed through to the HTML5 runtime.
+    const videoPath = relativePath.startsWith('videos/videos/') ? relativePath : 'videos/videos/' + relativePath.slice('videos/'.length);
+    candidates.push(CDN + videoPath, CDN + 'videos/' + relativePath, CDN + relativePath);
   }
   // A library-qualified path such as shared:notes is requested as shared/notes.png,
   // while the official repository stores it under shared/images/notes.png.
@@ -128,6 +130,23 @@ function buildManifest(){
     extra.push({id, path: a.path, type: a.type, size: a.size});
   }
   m.assets = m.assets.concat(extra);
+  // openfl.Assets.exists() checks the manifest before the video URL is
+  // requested. The official repository keeps these files in videos/videos,
+  // so expose them under the same virtual assets path used by Paths.videos().
+  const officialVideos = [
+    '2hotCutscene.mp4', 'blazinCutscene.mp4', 'boyfriendEverywhere.mp4',
+    'darnellCutscene-censored.mp4', 'darnellCutscene.mp4', 'gunsCutscene.mkv',
+    'introSelect.mp4', 'mobileRelease.mp4', 'riftCollabTrailer.mp4',
+    'stressCutscene-censored.mkv', 'stressCutscene.mkv',
+    'stressPicoCutscene-censored.mkv', 'stressPicoCutscene.mkv', 'ughCutscene.mkv'
+  ];
+  for (const file of officialVideos) {
+    const id = 'assets/videos/videos/' + file;
+    if (!seen.has(id)) {
+      seen.add(id);
+      m.assets.push({id, path: '../assets/videos/videos/' + file, type: 'BINARY', size: 0});
+    }
+  }
   manifestJson = JSON.stringify(m);
   return manifestJson;
 }
