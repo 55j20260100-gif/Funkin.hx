@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v26-github';
+const CACHE_NAME = 'funkin-assets-v27-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -85,6 +85,11 @@ async function resolveAsset(relativePath) {
     } catch (_) {}
   }
   if (/\.(png|jpg|jpeg|gif)$/i.test(basename)) return transparentPng();
+  // shared ライブラリは preload:true で一括読込するため、1件でも 404 だとライブラリ全体の読込が
+  // 失敗して「ローディングで固まる」。shared 配下の欠落テキストは空の200で返して先へ進める。
+  if (/^shared\//i.test(relativePath) && /\.(json|xml|txt|frag|vert|hxc|hx|srt|fnt)$/i.test(basename)) {
+    return new Response(/\.json$/i.test(basename) ? '{}' : '', {status:200,headers:{'Content-Type':/\.json$/i.test(basename)?'application/json':'text/plain;charset=utf-8'}});
+  }
   // Do not return an empty 200 response for missing audio/JSON. OpenFL's
   // loader treats that as a successful load and can wait forever during the
   // final game loading phase. A real 404 lets the bundle fail gracefully.
