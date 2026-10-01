@@ -613,7 +613,7 @@ const DEBUG_PATCHES = [
 // 1行目の直後ではなく「その場の直前」に差し込みたいもの(全出現を置換)
 const DEBUG_REPLACE_ALL = [
   ["this.__video.src = url;",
-    "if(typeof(url)==\"string\"&&/\\.mkv(\\?|$)/i.test(url)&&window.__mkvToMp4){var _ns=this,_v=this.__video;window.__mkvToMp4(url).then(function(u){if(_ns.__video===_v&&!_ns.__closed){_v.src=u;var p=_v.play();if(p&&p.catch)p.catch(function(e){window.__dbg&&window.__dbg(\"video play rejected\",String(e));});}}).catch(function(){if(_ns.__video===_v)_v.src=url;});return;}this.__video.src = url;"],
+    "if(typeof(url)==\"string\"&&/\\.mkv(\\?|$)/i.test(url)&&window.__mkvToMp4){var _ns=this,_v=this.__video;window.__mkvToMp4(url).then(function(r){if(_ns.__video===_v&&!_ns.__closed){_v.src=r.videoUrl;window.__attachMkvSubtitle&&window.__attachMkvSubtitle(_v,r.subtitle||\"\");var p=_v.play();if(p&&p.catch)p.catch(function(e){window.__dbg&&window.__dbg(\"video play rejected\",String(e));});}}).catch(function(){if(_ns.__video===_v){window.__attachMkvSubtitle&&window.__attachMkvSubtitle(_v,\"\");_v.src=url;}});return;}this.__video.src = url;"],
   // Video cutscenes: some official videos are .mkv, which Safari/Firefox cannot play. Without this the cutscene hangs
   // and video.play() rejects (seen when resuming from the pause menu). Swallow play() rejections and skip a broken video.
   ["this.__video.play();",
@@ -646,82 +646,40 @@ function patchGameJs(text) {
 // is re-encoded to AAC, inside a throw-away Worker (freed afterwards). The result is cached in Cache Storage.
 function mkvPrelude() {
   var CORE = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js';
+  // ffmpeg.wasm temporarily needs the MKV, wasm heap, and MP4 output at once.
+  // Refuse unusually large inputs instead of letting the tab be killed by the OS.
+  var memoryHint = Number((typeof navigator !== 'undefined' && navigator.deviceMemory) || 4);
+  var MAX_INPUT_BYTES = (memoryHint <= 2 ? 256 : memoryHint <= 4 ? 448 : 768) * 1024 * 1024;
+  var MAX_CACHE_BYTES = 256 * 1024 * 1024;
   var WASM = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm';
-  var CACHE = 'funkin-mp4-v1';
-  var pending = {};
+  var CACHE = 'funkin-mp4-v3', SUB_CACHE = 'funkin-ass-v2', pending = {};
   function workerMain() {
-    self.onmessage = function (e) {
-      var d = e.data;
-      (async function () {
-        try {
-          importScripts(d.core);
-          var wasmBinary = await (await fetch(d.wasm)).arrayBuffer();
-          var errs = [];
-          var core = await createFFmpegCore({ wasmBinary: wasmBinary, print: function () {}, printErr: function (l) { errs.push(l); } });
-          core.FS.writeFile('in.mkv', new Uint8Array(d.input));
-          core.exec.apply(core, d.args);
-          if (core.ret !== 0) throw new Error('ffmpeg exit ' + core.ret + ': ' + errs.slice(-3).join(' | '));
-          var copy = new Uint8Array(core.FS.readFile('out.mp4')).buffer;
-          postMessage({ ok: true, out: copy }, [copy]);
-        } catch (err) {
-          postMessage({ ok: false, err: String((err && err.message) || err) });
-        }
-      })();
-    };
+    self.onmessage = function (e) { var d = e.data; (async function () {
+      try {
+        importScripts(d.core); var wasmBinary = await (await fetch(d.wasm)).arrayBuffer(), errs = [];
+        var core = await createFFmpegCore({wasmBinary: wasmBinary, print: function(){}, printErr: function(l){errs.push(l);}});
+        core.FS.writeFile('in.mkv', new Uint8Array(d.input)); d.input = null; core.exec.apply(core, d.args);
+        if (core.ret !== 0) throw new Error('ffmpeg exit '+core.ret+': '+errs.slice(-3).join(' | '));
+        var videoBytes = core.FS.readFile('out.mp4'), video = videoBytes.buffer.slice(videoBytes.byteOffset, videoBytes.byteOffset + videoBytes.byteLength), subtitle = null;
+        try { var subBytes = core.FS.readFile('out.ass'); subtitle = subBytes.buffer.slice(subBytes.byteOffset, subBytes.byteOffset + subBytes.byteLength); } catch (_) {}
+        try { core.FS.unlink('in.mkv'); core.FS.unlink('out.mp4'); if (subtitle) core.FS.unlink('out.ass'); } catch (_) {}
+        var transfers = [video], message = {ok:true, video:video};
+        if (subtitle) { message.subtitle = subtitle; transfers.push(subtitle); } postMessage(message, transfers);
+      } catch (err) { postMessage({ok:false, err:String((err&&err.message)||err)}); }
+    })(); };
   }
   function overlay(msg) {
-    var el = document.getElementById('__mkvOv');
-    if (!msg) { if (el) el.remove(); return; }
-    if (!el) {
-      el = document.createElement('div');
-      el.id = '__mkvOv';
-      el.style.cssText = 'position:fixed;left:0;right:0;bottom:14px;text-align:center;color:#fff;font:14px sans-serif;z-index:99999;pointer-events:none;text-shadow:0 0 4px #000';
-      (document.body || document.documentElement).appendChild(el);
-    }
-    el.textContent = msg;
+    var el=document.getElementById('__mkvOv'); if(!msg){if(el)el.remove();return;}
+    if(!el){el=document.createElement('div');el.id='__mkvOv';el.style.cssText='position:fixed;left:0;right:0;bottom:14px;text-align:center;color:#fff;font:14px sans-serif;z-index:99999;pointer-events:none;text-shadow:0 0 4px #000';(document.body||document.documentElement).appendChild(el);} el.textContent=msg;
   }
-  function log() { try { window.__dbg && window.__dbg.apply(null, arguments); } catch (e) {} }
-  window.__mkvToMp4 = function (url) {
-    var name = String(url).split('?')[0].split('/').pop();
-    if (pending[name]) return pending[name];
-    var p = (async function () {
-      var key = 'https://mkv2mp4.local/' + name;
-      var cache = null;
-      try {
-        cache = await caches.open(CACHE);
-        var hit = await cache.match(key);
-        if (hit) { log('mkv cache hit', name); return URL.createObjectURL(await hit.blob()); }
-      } catch (e) {}
-      overlay('動画を変換中… (初回のみ)');
-      var w = null;
-      try {
-        var res = await fetch(url);
-        if (!res.ok) throw new Error('fetch ' + res.status);
-        var input = await res.arrayBuffer();
-        w = new Worker(URL.createObjectURL(new Blob(['(' + workerMain.toString() + ')()'], { type: 'text/javascript' })));
-        var t0 = Date.now();
-        var out = await new Promise(function (resolve, reject) {
-          w.onmessage = function (e) { e.data.ok ? resolve(e.data.out) : reject(new Error(e.data.err)); };
-          w.onerror = function (e) { reject(new Error((e && e.message) || 'worker error')); };
-          w.postMessage({
-            core: CORE, wasm: WASM, input: input,
-            args: ['-i', 'in.mkv', '-map', '0:v:0', '-map', '0:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', 'out.mp4']
-          }, [input]);
-        });
-        log('mkv converted', name, (Date.now() - t0) + 'ms', out.byteLength + 'B');
-        var blob = new Blob([out], { type: 'video/mp4' });
-        try { if (cache) await cache.put(key, new Response(blob, { headers: { 'Content-Type': 'video/mp4' } })); } catch (e) {}
-        return URL.createObjectURL(blob);
-      } finally {
-        if (w) w.terminate();
-        overlay(null);
-      }
-    })();
-    pending[name] = p;
-    p.catch(function (e) { delete pending[name]; log('mkv convert failed', name, String(e)); });
-    return p;
-  };
+  function log(){try{window.__dbg&&window.__dbg.apply(null,arguments);}catch(e){}}
+  function assTime(s){var m=String(s||'').trim().match(/^(\d+):(\d{2}):(\d{2})[.:](\d{2})$/);return m?(+m[1]*3600+ +m[2]*60+ +m[3]+ +m[4]/100):NaN;}
+  function assText(s){return String(s||'').replace(/\\N/g,'\n').replace(/\\n/g,'\n').replace(/\\h/g,' ').replace(/\{[^}]*\}/g,'').replace(/<[^>]*>/g,'').trim();}
+  function parseAss(text){var out=[],lines=String(text||'').replace(/^\uFEFF/,'').split(/\r?\n/),section='';for(var i=0;i<lines.length;i++){var line=lines[i],t=line.trim();if(/^\[.*\]$/.test(t)){section=t.toLowerCase();continue;}if(section!=='[events]'||!/^dialogue\s*:/i.test(t))continue;var parts=t.replace(/^dialogue\s*:/i,'').trim().split(','),start=assTime(parts.shift()),end=assTime(parts.shift()),value=assText(parts.join(','));if(isFinite(start)&&isFinite(end)&&value)out.push({start:start,end:end,text:value});}out.sort(function(a,b){return a.start-b.start;});return out;}
+  window.__attachMkvSubtitle=function(video,ass){if(!video)return;if(video.__mkvSubtitleCleanup)video.__mkvSubtitleCleanup();var cues=parseAss(ass);if(!cues.length)return;var el=document.createElement('div');el.style.cssText='position:fixed;left:5%;right:5%;bottom:6%;z-index:2147483645;display:none;pointer-events:none;text-align:center;color:#fff;font:700 clamp(18px,3.2vw,42px)/1.2 sans-serif;white-space:pre-line;letter-spacing:.02em;text-shadow:-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000,2px 2px 0 #000,0 0 7px #000';(document.body||document.documentElement).appendChild(el);var last=-1;function paint(){var t=Number(video.currentTime)||0,found=-1,lo=0,hi=cues.length-1;while(lo<=hi){var mid=(lo+hi)>>1;if(cues[mid].start<=t){found=mid;lo=mid+1;}else hi=mid-1;}if(found>=0&&t>=cues[found].end)found=-1;if(found!==last){last=found;el.textContent=found<0?'':cues[found].text;el.style.display=found<0?'none':'block';}}var timer=0,stopped=false;function tick(){if(stopped)return;paint();timer=requestAnimationFrame(tick);}function start(){if(!timer)timer=requestAnimationFrame(tick);}function stop(){if(timer){cancelAnimationFrame(timer);timer=0;}paint();}video.addEventListener('play',start);video.addEventListener('timeupdate',paint);video.addEventListener('seeking',paint);video.addEventListener('pause',stop);video.addEventListener('ended',stop);if(!video.paused)start();paint();video.__mkvSubtitleCleanup=function(){stopped=true;stop();video.removeEventListener('play',start);video.removeEventListener('timeupdate',paint);video.removeEventListener('seeking',paint);video.removeEventListener('pause',stop);video.removeEventListener('ended',stop);el.remove();delete video.__mkvSubtitleCleanup;};log('ASS subtitles attached',cues.length);};
+  window.__mkvToMp4=function(url){var name=String(url).split('?')[0].split('/').pop();if(pending[name])return pending[name];var p=(async function(){var key='https://mkv2mp4.local/'+name,subKey='https://mkv2ass.local/'+name,cache=null,subtitle='';try{cache=await caches.open(CACHE);var hit=await cache.match(key);if(hit){var sh=await caches.open(SUB_CACHE).then(function(c){return c.match(subKey);}).catch(function(){return null;});if(sh)subtitle=await sh.text();log('mkv cache hit',name);return {videoUrl:URL.createObjectURL(await hit.blob()),subtitle:subtitle};}}catch(e){}overlay('動画を変換中… (初回のみ)');var w=null;try{var res=await fetch(url);if(!res.ok)throw new Error('fetch '+res.status);var advertised=Number(res.headers.get('content-length')||0);if(advertised>MAX_INPUT_BYTES)throw new Error('MKV too large for safe browser conversion ('+Math.round(advertised/1048576)+' MiB)');var input=await res.arrayBuffer();if(input.byteLength>MAX_INPUT_BYTES)throw new Error('MKV too large for safe browser conversion ('+Math.round(input.byteLength/1048576)+' MiB)');w=new Worker(URL.createObjectURL(new Blob(['('+workerMain.toString()+')()'],{type:'text/javascript'})));var t0=Date.now();var out=await new Promise(function(resolve,reject){w.onmessage=function(e){e.data.ok?resolve(e.data):reject(new Error(e.data.err));};w.onerror=function(e){reject(new Error((e&&e.message)||'worker error'));};w.postMessage({core:CORE,wasm:WASM,input:input,args:['-i','in.mkv','-map','0:v:0','-map','0:a:0','-c:v','copy','-c:a','aac','-b:a','160k','-movflags','+faststart','out.mp4','-map','0:s:0?','-c:s','copy','out.ass']},[input]);});var blob=new Blob([out.video],{type:'video/mp4'});if(out.subtitle)subtitle=new TextDecoder('utf-8').decode(out.subtitle);try{if(cache&&out.video.byteLength<=MAX_CACHE_BYTES)await cache.put(key,new Response(blob,{headers:{'Content-Type':'video/mp4'}}));if(subtitle)await caches.open(SUB_CACHE).then(function(c){return c.put(subKey,new Response(subtitle,{headers:{'Content-Type':'text/plain; charset=utf-8'}}));});}catch(e){}log('mkv converted',name,(Date.now()-t0)+'ms',out.video.byteLength+'B',subtitle?'ASS found':'no ASS');return {videoUrl:URL.createObjectURL(blob),subtitle:subtitle};}finally{if(w)w.terminate();overlay(null);}})();pending[name]=p;p.catch(function(e){delete pending[name];log('mkv convert failed',name,String(e));});return p;};
 }
+
 
 async function servePatchedGame(request) {
   try {
