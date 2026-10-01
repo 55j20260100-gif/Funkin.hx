@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v40-github';
+const CACHE_NAME = 'funkin-assets-v41-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -442,11 +442,14 @@ function buildManifest(){
     ['weekend1/sounds/shot4.mp3','SOUND'], ['weekend1/sounds/shot4.ogg','SOUND'], ['weekend1/sounds/singed_loop.mp3','SOUND'],
     ['weekend1/sounds/singed_loop.ogg','SOUND']
   ];
+  // Keep memory low: audio stays lazy (decoding dozens of mp3s at once crashed the tab), and the heavy
+  // week7 erect/cutscene art is only fetched when actually used. Only light images/text are preloaded.
   for (const [file, type] of weekLibraryFiles) {
     const id = 'assets/' + file;
     if (!seen.has(id)) {
       seen.add(id);
-      m.assets.push({id, path: '../assets/' + file, type, size: 0, preload: true});
+      const light = (type === 'IMAGE' || type === 'TEXT') && !/^week7\/.*\/(erect|cutscene|masks)\//i.test(file);
+      m.assets.push({id, path: '../assets/' + file, type, size: 0, preload: light});
     }
   }
   const tankmanVocals = [
