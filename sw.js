@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v38-github';
+const CACHE_NAME = 'funkin-assets-v39-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -267,6 +267,24 @@ function buildManifest(){
     ['week7/images/tankmanKilled1.xml', 'TEXT']
   ];
   for (const [file, type] of tankmanStageFiles) {
+    const id = 'assets/' + file;
+    if (!seen.has(id)) {
+      seen.add(id);
+      m.assets.push({id, path: '../assets/' + file, type, size: 0, preload: true});
+    }
+  }
+  // week3 (Philly) stage art. These are not in the base manifest, so Assets.exists() was false,
+  // the stage props were never created and getNamedProp('lights') returned null (buildStage #34).
+  const phillyStageFiles = [
+    ['week3/images/philly/sky.png', 'IMAGE'], ['week3/images/philly/city.png', 'IMAGE'],
+    ['week3/images/philly/win.png', 'IMAGE'], ['week3/images/philly/behindTrain.png', 'IMAGE'],
+    ['week3/images/philly/train.png', 'IMAGE'], ['week3/images/philly/street.png', 'IMAGE'],
+    ['week3/images/philly/erect/sky.png', 'IMAGE'], ['week3/images/philly/erect/city.png', 'IMAGE'],
+    ['week3/images/philly/erect/behindTrain.png', 'IMAGE'], ['week3/images/philly/erect/street.png', 'IMAGE'],
+    ['week3/images/philly/erect/cigarette.png', 'IMAGE'], ['week3/images/philly/erect/cigarette.xml', 'TEXT'],
+    ['week3/sounds/train_passes.mp3', 'SOUND'], ['week3/sounds/train_passes.ogg', 'SOUND']
+  ];
+  for (const [file, type] of phillyStageFiles) {
     const id = 'assets/' + file;
     if (!seen.has(id)) {
       seen.add(id);
