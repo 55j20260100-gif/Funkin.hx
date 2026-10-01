@@ -5,7 +5,31 @@
 <script>
 const hint = document.getElementById('hint');
 function setHint(text){ hint.firstChild.textContent = text + ' '; }
+
+// Funkin.js の Lime/OpenFL はフォントを「名前」だけで参照し、@font-face は作らない。
+// ページ側に同名の定義が無いとブラウザ標準のセリフ体になるため、VCR を同名で登録する。
+async function registerGameFonts(){
+  const faces = [
+    ['VCR OSD Mono',             './assets/fonts/vcr.ttf'],
+    ['VCR OSD Mono Bold',        './assets/fonts/vcr-bold.ttf'],
+    ['VCR OSD Mono Italic',      './assets/fonts/vcr-italic.ttf'],
+    ['VCR OSD Mono Bold Italic', './assets/fonts/vcr-bolditalic.ttf'],
+    // Flixel 既定フォント等、未登録のままだとセリフ体になる名前も VCR に寄せる
+    ['Nokia Cellphone FC Small', './assets/fonts/vcr.ttf'],
+    ['Monsterrat',               './assets/fonts/vcr.ttf']
+  ];
+  const jobs = [];
+  for (const [family, url] of faces) {
+    for (const style of ['normal', 'italic']) {
+      // Service Worker 経由(公式CDN)を優先し、取れなければ同梱の vcr-bold.ttf を使う
+      const face = new FontFace(family, `url("${url}"), url("./vcr-bold.ttf")`, {weight:'100 900', style});
+      jobs.push(face.load().then(f => { document.fonts.add(f); }, e => console.warn('VCRフォント登録失敗:', family, e)));
+    }
+  }
+  await Promise.allSettled(jobs);
+}
 async function prepareGameFont(config){
+  await registerGameFonts();
   const url = config.fontUrl || './vcr-bold.ttf';
   const name = (config.fontName || 'Funkin VCR').replace(/[^\w -]/g,'').trim() || 'Funkin VCR';
   navigator.serviceWorker.controller?.postMessage({type:'set-font-url', url});
@@ -35,9 +59,9 @@ function loadGameBundle(){
   document.body.appendChild(script);
 }
 (async function(){
-  if (!('serviceWorker' in navigator)) { setHint('このブラウザはService Worker非対応です。'); loadGameBundle(); return; }
+  if (!('serviceWorker' in navigator)) { setHint('このブラウザはService Worker非対応です。'); await registerGameFonts(); loadGameBundle(); return; }
   try {
-    const registration = await navigator.serviceWorker.register('./sw.js?v=26', {scope:'./'});
+    const registration = await navigator.serviceWorker.register('./sw.js?v=25', {scope:'./'});
     await registration.update();
     await navigator.serviceWorker.ready;
     // 新規訪問時も確実に現在のページを制御させる。
@@ -62,6 +86,7 @@ function loadGameBundle(){
   } catch(e) {
     setHint('アセット中継の準備に失敗: ' + e.message);
     console.error(e);
+    await registerGameFonts();
     loadGameBundle();
   }
 })();
