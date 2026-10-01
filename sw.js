@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v30-github';
+const CACHE_NAME = 'funkin-assets-v31-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -70,6 +70,12 @@ async function resolveAsset(relativePath) {
   else if (relativePath.startsWith('images/')) candidates.push(CDN + 'preload/' + relativePath, CDN + 'shared/' + relativePath, CDN + relativePath);
   else if (relativePath.startsWith('songs/')) candidates.push(CDN + relativePath, CDN + 'preload/' + relativePath, CDN + 'shared/' + relativePath);
   else if (relativePath.startsWith('music/') || relativePath.startsWith('sounds/')) candidates.push(CDN + 'preload/' + relativePath, CDN + 'shared/' + relativePath, CDN + relativePath);
+  // The game requests videos as assets/videos/<name>, while the official
+  // repository stores them under videos/videos/<name>.
+  else if (relativePath.startsWith('videos/')) {
+    const videoPath = relativePath.slice('videos/'.length);
+    candidates.push(CDN + 'videos/videos/' + videoPath, CDN + 'videos/' + relativePath, CDN + relativePath);
+  }
   // A library-qualified path such as shared:notes is requested as shared/notes.png,
   // while the official repository stores it under shared/images/notes.png.
   else if (/^shared\//i.test(relativePath)) {
