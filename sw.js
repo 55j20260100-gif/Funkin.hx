@@ -1,5 +1,5 @@
 const CDN = 'https://raw.githubusercontent.com/FunkinCrew/funkin.assets/main/';
-const CACHE_NAME = 'funkin-assets-v36-github';
+const CACHE_NAME = 'funkin-assets-v37-github';
 let modBase = '';
 let fontUrl = './vcr-bold.ttf';
 let engine = 'official';
@@ -242,6 +242,31 @@ function buildManifest(){
     ['sserafim/sounds/doorKick2.mp3', 'SOUND']
   ];
   for (const [file, type] of sserafimFiles) {
+    const id = 'assets/' + file;
+    if (!seen.has(id)) {
+      seen.add(id);
+      m.assets.push({id, path: '../assets/' + file, type, size: 0, preload: true});
+    }
+  }
+  const tankmanStageFiles = [
+    ['week7/images/bricksGround.png', 'IMAGE'], ['week7/images/cityruins2.png', 'IMAGE'],
+    ['week7/images/mountains2.png', 'IMAGE'], ['week7/images/smokeLeft.png', 'IMAGE'],
+    ['week7/images/smokeLeft.xml', 'TEXT'], ['week7/images/smokeRight.png', 'IMAGE'],
+    ['week7/images/smokeRight.xml', 'TEXT'], ['week7/images/tank0.png', 'IMAGE'],
+    ['week7/images/tank0.xml', 'TEXT'], ['week7/images/tank1.png', 'IMAGE'],
+    ['week7/images/tank1.xml', 'TEXT'], ['week7/images/tank2.png', 'IMAGE'],
+    ['week7/images/tank2.xml', 'TEXT'], ['week7/images/tank3.png', 'IMAGE'],
+    ['week7/images/tank3.xml', 'TEXT'], ['week7/images/tank4.png', 'IMAGE'],
+    ['week7/images/tank4.xml', 'TEXT'], ['week7/images/tank5.png', 'IMAGE'],
+    ['week7/images/tank5.xml', 'TEXT'], ['week7/images/tankBuildings.png', 'IMAGE'],
+    ['week7/images/tankClouds.png', 'IMAGE'], ['week7/images/tankGround.png', 'IMAGE'],
+    ['week7/images/tankMountains.png', 'IMAGE'], ['week7/images/tankRolling.png', 'IMAGE'],
+    ['week7/images/tankRolling.xml', 'TEXT'], ['week7/images/tankRuins.png', 'IMAGE'],
+    ['week7/images/tankSky.png', 'IMAGE'], ['week7/images/tankWatchtower.png', 'IMAGE'],
+    ['week7/images/tankWatchtower.xml', 'TEXT'], ['week7/images/tankmanKilled1.png', 'IMAGE'],
+    ['week7/images/tankmanKilled1.xml', 'TEXT']
+  ];
+  for (const [file, type] of tankmanStageFiles) {
     const id = 'assets/' + file;
     if (!seen.has(id)) {
       seen.add(id);
